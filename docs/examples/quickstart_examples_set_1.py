@@ -16,18 +16,24 @@ from crawl4ai import BFSDeepCrawlStrategy, DomainFilter, FilterChain
 from crawl4ai import BrowserConfig
 
 __cur_dir__ = Path(__file__).parent
-
+URL = "https://tenders.etimad.sa/Tender/AllTendersForVisitor?&MultipleSearch=&TenderCategory=6&TenderActivityId=0&ReferenceNumber=&TenderNumber=&agency=&ConditionaBookletRange=&PublishDateId=5&LastOfferPresentationDate=&LastOfferPresentationDate=&TenderAreasIdString=&TenderTypeId=&TenderActivityId=&TenderSubActivityId=&AgencyCode=&FromLastOfferPresentationDateString=&ToLastOfferPresentationDateString=&SortDirection=DESC&Sort=SubmitionDate&PageSize=6&IsSearch=true&ConditionaBookletRange=&PublishDateId=5&PageNumber=1"
 async def demo_basic_crawl():
     """Basic web crawling with markdown generation"""
     print("\n=== 1. Basic Web Crawling ===")
+    # <label class="ml-3"> النشاط الأساسي</label>
     async with AsyncWebCrawler(config = BrowserConfig(
         viewport_height=800,
         viewport_width=1200,
-        headless=True,
+        headless=False,
         verbose=True,
+        
     )) as crawler:
         results: List[CrawlResult] = await crawler.arun(
-            url="https://news.ycombinator.com/"
+            # url="https://news.ycombinator.com/"
+            url=URL,
+            page_timeout=60000,  # 10 seconds timeout for each page
+            wait_until="networkidle0",  # Wait until network is idle
+            wait_for="label.ml-3",  # Wait for a specific element to load
         )
 
         for i, result in enumerate(results):
@@ -35,7 +41,9 @@ async def demo_basic_crawl():
             print(f"Success: {result.success}")
             if result.success:
                 print(f"Markdown length: {len(result.markdown.raw_markdown)} chars")
-                print(f"First 100 chars: {result.markdown.raw_markdown[:100]}...")
+                print(f"First 100 chars: {result.markdown.raw_markdown}...")
+                with open(f"{__cur_dir__}/tmp/result_{i + 1}.md", "a") as f:
+                    f.write(result.markdown.raw_markdown)
             else:
                 print("Failed to crawl the URL")
 
@@ -80,10 +88,14 @@ async def demo_fit_markdown():
 
 async def demo_llm_structured_extraction_no_schema():
     # Create a simple LLM extraction strategy (no schema required)
+    # print(help(LLMConfig))
     extraction_strategy = LLMExtractionStrategy(
         llm_config=LLMConfig(
-            provider="groq/qwen-2.5-32b",
-            api_token="env:GROQ_API_KEY",
+            # provider="gemini/gemini-2.5-flash-preview",
+            # api_token="AIzaSyD7YtZHaNH1I_o7VlGi2UDylpAe5gwTlh8",
+            api_token=None,
+            provider="ollama/gemma3:27b-it-qat",
+            # base_url="http://localhost:11434",
         ),
         instruction="This is news.ycombinator.com, extract all news, and for each, I want title, source url, number of comments.",
         extract_type="schema",
@@ -100,6 +112,44 @@ async def demo_llm_structured_extraction_no_schema():
     async with AsyncWebCrawler() as crawler:
         results: List[CrawlResult] = await crawler.arun(
             "https://news.ycombinator.com/", config=config
+        )
+
+        for result in results:
+            print(f"URL: {result.url}")
+            print(f"Success: {result.success}")
+            if result.success:
+                data = json.loads(result.extracted_content)
+                print(json.dumps(data, indent=2))
+            else:
+                print("Failed to extract structured data")
+
+
+async def demo_llm_structured_extraction_no_schema_v2():
+    # Create a simple LLM extraction strategy (no schema required)
+    # print(help(LLMConfig))
+    extraction_strategy = LLMExtractionStrategy(
+        llm_config=LLMConfig(
+            # provider="gemini/gemini-2.5-flash-preview",
+            # api_token="AIzaSyD7YtZHaNH1I_o7VlGi2UDylpAe5gwTlh8",
+            api_token=None,
+            provider="ollama/gemma3:27b-it-qat",
+            # base_url="http://localhost:11434",
+        ),
+        instruction="This is a tenders.etimad.sa, extract all tenders, and for each, I want title, source url",
+        extract_type="schema",
+        schema="{title: string, url: string}",
+        extra_args={
+            "temperature": 0.0,
+            "max_tokens": 4096,
+        },
+        verbose=True,
+    )
+
+    config = CrawlerRunConfig(extraction_strategy=extraction_strategy)
+
+    async with AsyncWebCrawler(headless=False, verbose=True, timeout=30000) as crawler:
+        results: List[CrawlResult] = await crawler.arun(
+            URL, config=config
         )
 
         for result in results:
@@ -393,16 +443,16 @@ async def main():
 
     # Run all demos
     await demo_basic_crawl()
-    await demo_parallel_crawl()
-    await demo_fit_markdown()
-    await demo_llm_structured_extraction_no_schema()
-    await demo_css_structured_extraction_no_schema()
-    await demo_deep_crawl()
-    await demo_js_interaction()
-    await demo_media_and_links()
-    await demo_screenshot_and_pdf()
+    # await demo_parallel_crawl()
+    # await demo_fit_markdown()
+    # await demo_llm_structured_extraction_no_schema_v2()
+    # await demo_css_structured_extraction_no_schema()
+    # await demo_deep_crawl()
+    # await demo_js_interaction()
+    # await demo_media_and_links()
+    # await demo_screenshot_and_pdf()
     # # await demo_proxy_rotation()
-    await demo_raw_html_and_file()
+    # await demo_raw_html_and_file()
 
     # Clean up any temp files that may have been created
     print("\n=== Demo Complete ===")
